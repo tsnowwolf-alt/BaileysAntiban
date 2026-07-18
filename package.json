@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-secundario-baileys",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Servico separado (numero secundario/descartavel) usando Baileys puro, isolado da Evolution API oficial em producao",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "baileys": ">=7.0.0-rc.0",
+    "@hapi/boom": "^10.0.1",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4",
+    "pino": "^9.0.0"
+  }
+}
