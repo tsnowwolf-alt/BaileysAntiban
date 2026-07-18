@@ -1,0 +1,142 @@
+// Servico isolado: numero secundario/descartavel via Baileys + baileys-antiban.
+// NAO toca na Evolution API oficial nem no numero +55 11 5304-6520 — roda como
+// um servico Railway totalmente separado, so pra validar o fluxo do Typebot
+// enquanto o problema da WABA oficial nao se resolve.
+
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from 'baileys';
+import { Boom } from '@hapi/boom';
+import { wrapSocket } from 'baileys-antiban';
+import express from 'express';
+import qrcode from 'qrcode';
+
+// Aponte pro MESMO webhook que a Evolution ja usa, ou pra um novo fluxo n8n
+// separado (recomendado) — ver nota no final da resposta sobre isso.
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'https://n8n-production-99463.up.railway.app/webhook/entrada-whatsapp';
+const PORT = process.env.PORT || 3001;
+
+let safeSock = null;
+let currentQR = null;
+
+async function connectToWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+
+  const sock = makeWASocket({
+    auth: state,
+    // Numero novo: nao precisa de nada exotico aqui, config padrao ja serve.
+  });
+
+  // preset conservador de proposito — numero novo, sem historico, sem pressa.
+  safeSock = wrapSocket(sock, {
+    preset: 'conservative',
+    warmupDays: 7,
+    logging: true,
+  });
+
+  sock.ev.on('creds.update', saveCreds);
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      currentQR = qr;
+      console.log('Novo QR code disponivel em /qr');
+    }
+
+    if (connection === 'close') {
+      const statusCode = lastDisconnect?.error instanceof Boom
+        ? lastDisconnect.error.output.statusCode
+        : undefined;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      console.log('Conexao fechada. Reconectando?', shouldReconnect);
+      if (shouldReconnect) connectToWhatsApp();
+    } else if (connection === 'open') {
+      currentQR = null;
+      console.log('Conectado ao WhatsApp (numero secundario).');
+    }
+  });
+
+  // Repassa mensagens recebidas pro n8n — payload simples e proprio,
+  // NAO é o mesmo formato que a Evolution manda, por isso o n8n precisa
+  // de um fluxo (ou branch) separado pra tratar isso.
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    for (const msg of messages) {
+      if (msg.key.fromMe || !msg.message) continue;
+
+      const from = msg.key.remoteJid;
+      const text = msg.message.conversation
+        || msg.message.extendedTextMessage?.text
+        || '';
+
+      if (!text) continue;
+
+      try {
+        await fetch(N8N_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from,
+            text,
+            source: 'baileys-secundario',
+            timestamp: msg.messageTimestamp,
+          }),
+        });
+      } catch (err) {
+        console.error('Falha ao repassar mensagem pro n8n:', err.message);
+      }
+    }
+  });
+
+  return sock;
+}
+
+connectToWhatsApp();
+
+// --- HTTP: pra n8n chamar quando quiser mandar uma resposta, e pra voce
+// escanear o QR pelo navegador (Railway nao tem terminal visivel facil) ---
+
+const app = express();
+app.use(express.json());
+
+app.get('/qr', async (req, res) => {
+  if (safeSock && !currentQR) {
+    return res.send('<p>Ja conectado (ou ainda inicializando). Sem QR pendente.</p>');
+  }
+  if (!currentQR) {
+    return res.send('<p>Carregando QR... atualize a pagina em alguns segundos.</p>');
+  }
+  const qrImage = await qrcode.toDataURL(currentQR);
+  res.send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 40px;">
+      <h2>Escaneie com o número secundário</h2>
+      <p>WhatsApp → Aparelhos conectados → Conectar um aparelho</p>
+      <img src="${qrImage}" style="width: 300px; height: 300px;" />
+    </div>
+  `);
+});
+
+app.post('/send', async (req, res) => {
+  const { to, text } = req.body || {};
+  if (!to || !text) {
+    return res.status(400).json({ error: 'Campos "to" e "text" sao obrigatorios' });
+  }
+  if (!safeSock) {
+    return res.status(503).json({ error: 'WhatsApp ainda nao conectado' });
+  }
+
+  try {
+    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    await safeSock.sendMessage(jid, { text });
+    res.json({ status: 'enviado' });
+  } catch (err) {
+    // Pode ser bloqueio do antiban (rate limit, warmup, timelock) —
+    // olhe /health pra ver o motivo.
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/health', (req, res) => {
+  if (!safeSock) return res.json({ status: 'conectando...' });
+  res.json(safeSock.antiban.getStats());
+});
+
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
