@@ -161,7 +161,7 @@ const MIN_GAP_MS = 4000;
 // do espaco minimo entre mensagens acima, isso faz o "digitando..." aparecer
 // de verdade no WhatsApp antes de cada envio.
 function calcularDelayDigitacao(texto) {
-  const MS_POR_CARACTER = 150;   // ajuste pra mais lento/rapido
+  const MS_POR_CARACTER = 80;   // ajuste pra mais lento/rapido
   const MIN_MS = 1800;           // piso — nem mensagem curta sai instantanea
   const MAX_MS = 12000;          // teto — mensagem longa nao trava o chat
   const jitter = 0.85 + Math.random() * 0.3; // variacao de +-15%, evita padrao fixo
