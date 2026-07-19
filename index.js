@@ -192,7 +192,7 @@ const MIN_GAP_MS = 4000;
 // e re-mostra o "composing" caso os ~10s de validade dele ja tenham
 // expirado enquanto a IA processava.
 function calcularDelayDigitacao(texto) {
-  const MS_POR_CARACTER = 50;    // ajuste pra mais lento/rapido
+  const MS_POR_CARACTER = 40;    // ajuste pra mais lento/rapido
   const MIN_MS = 1200;           // piso — nem mensagem curta sai instantanea
   const MAX_MS = 8000;           // teto — mensagem longa nao trava o chat
   const jitter = 0.85 + Math.random() * 0.3; // variacao de +-15%, evita padrao fixo
