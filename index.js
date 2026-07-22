@@ -661,7 +661,7 @@ const MIN_GAP_MS = 4000;
 // e re-mostra o "composing" caso os ~10s de validade dele ja tenham
 // expirado enquanto a IA processava.
 function calcularDelayDigitacao(texto) {
-  const MS_POR_CARACTER = 80;    // ajuste pra mais lento/rapido
+  const MS_POR_CARACTER = 30;    // ajuste pra mais lento/rapido
   const MIN_MS = 1200;           // piso — nem mensagem curta sai instantanea
   const MAX_MS = 8000;           // teto — mensagem longa nao trava o chat
   const jitter = 0.85 + Math.random() * 0.3; // variacao de +-15%, evita padrao fixo
@@ -673,8 +673,8 @@ function calcularDelayDigitacao(texto) {
 // cada contato novo. Ajusta os dois valores abaixo (em segundos) pra
 // definir o range; soma com o delay de digitacao normal (automatico,
 // baseado no tamanho de CADA mensagem).
-const DELAY_PRIMEIRA_MENSAGEM_MIN_S = 3; // <- minimo, em segundos
-const DELAY_PRIMEIRA_MENSAGEM_MAX_S = 8; // <- maximo, em segundos
+const DELAY_PRIMEIRA_MENSAGEM_MIN_S = 2; // <- minimo, em segundos
+const DELAY_PRIMEIRA_MENSAGEM_MAX_S = 5; // <- maximo, em segundos
 const contatosJaRespondidos = new Set();
 
 function delayPrimeiraMensagemMs() {
